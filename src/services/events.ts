@@ -7,6 +7,7 @@ async function fetchEvents(
     order: string;
     deviceId?: number;
     deviceName?: string;
+    hasMedia?: boolean;
   }
 ) {
   console.log("Fetch events called with params:", params);
@@ -15,10 +16,40 @@ async function fetchEvents(
 
   // Build WHERE clause
   let whereClause = sql``;
+  let conditions = [];
+
   if (params.deviceId) {
-    whereClause = sql`WHERE e."deviceId" = ${params.deviceId}`;
+    conditions.push(sql`e."deviceId" = ${params.deviceId}`);
   } else if (params.deviceName) {
-    whereClause = sql`WHERE d."name" = ${params.deviceName}`;
+    conditions.push(sql`d."name" = ${params.deviceName}`);
+  }
+
+  // Add media and sensor data filter conditions
+  if (params.hasMedia !== undefined) {
+    if (params.hasMedia) {
+      conditions.push(
+        sql`EXISTS (SELECT 1 FROM "EventMedia" em WHERE em."eventId" = e.id)`
+      );
+    } else {
+      conditions.push(
+        sql`NOT EXISTS (SELECT 1 FROM "EventMedia" em WHERE em."eventId" = e.id)`
+      );
+      // For events without media, also ensure they have sensor data with value > 0
+      conditions.push(sql`EXISTS (
+        SELECT 1 
+        FROM "SensorData" sd 
+        WHERE sd."eventId" = e.id 
+        AND sd.value > 0
+      )`);
+    }
+  }
+
+  // Combine conditions if they exist
+  if (conditions.length > 0) {
+    whereClause = sql`WHERE ${conditions[0]}`;
+    for (let i = 1; i < conditions.length; i++) {
+      whereClause = sql`${whereClause} AND ${conditions[i]}`;
+    }
   }
 
   // Validate sort column and order
@@ -32,7 +63,7 @@ async function fetchEvents(
   const sortColumn = validSortColumns.includes(params.sortBy)
     ? params.sortBy
     : "time";
-  const sortOrder = params.order.toUpperCase() === "DESC" ? "DESC" : "ASC";
+  // const sortOrder = params.order.toUpperCase() === "DESC" ? "DESC" : "ASC";
 
   const baseQuery = sql`
     SELECT 

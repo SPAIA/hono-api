@@ -7,6 +7,11 @@ import postgres from "postgres";
 
 const events = new OpenAPIHono();
 
+// Update EventQuerySchema to include hasMedia
+const ExtendedEventQuerySchema = EventQuerySchema.extend({
+  hasMedia: z.enum(["true", "false"]).optional(),
+});
+
 function formatResponse(
   events: any[],
   totalCount: number,
@@ -25,6 +30,7 @@ function formatResponse(
     },
   };
 }
+
 const getEventRoute = createRoute({
   method: "get",
   path: "/event/:eventId",
@@ -57,13 +63,15 @@ const getEventRoute = createRoute({
     },
   },
 });
+
 const getEventsRoute = createRoute({
   method: "get",
   path: "/events",
   tags: ["Events"],
-  summary: "Get paginated events with regions and sensor data",
+  summary:
+    "Get paginated events with regions and sensor data. Optionally filter by media presence.",
   request: {
-    query: EventQuerySchema,
+    query: ExtendedEventQuerySchema,
   },
   responses: {
     200: {
@@ -87,6 +95,7 @@ const getEventsRoute = createRoute({
     },
   },
 });
+
 events.openapi(getEventRoute, async (c) => {
   const { eventId } = c.req.valid("param");
   const sql = postgres(c.env.HYPERDRIVE.connectionString);
@@ -106,13 +115,20 @@ events.openapi(getEventRoute, async (c) => {
     await sql.end();
   }
 });
+
 events.openapi(getEventsRoute, async (c) => {
   const params = c.req.valid("query");
   const sql = postgres(c.env.HYPERDRIVE.connectionString);
 
   try {
-    const { events, totalCount } = await fetchEvents(sql, params);
-    return c.json(formatResponse(events, totalCount, params));
+    // Convert string 'true'/'false' to boolean for hasMedia
+    const processedParams = {
+      ...params,
+      hasMedia: params.hasMedia ? params.hasMedia === "true" : undefined,
+    };
+
+    const { events, totalCount } = await fetchEvents(sql, processedParams);
+    return c.json(formatResponse(events, totalCount, processedParams));
   } catch (error) {
     return c.json(
       {
@@ -125,12 +141,13 @@ events.openapi(getEventsRoute, async (c) => {
     await sql.end();
   }
 });
+
 const getDeviceEventsRoute = createRoute({
   method: "get",
   path: "/device/:deviceName",
   tags: ["Events"],
   request: {
-    query: EventQuerySchema,
+    query: ExtendedEventQuerySchema,
     params: z.object({
       deviceName: z.string(),
     }),
@@ -144,17 +161,37 @@ const getDeviceEventsRoute = createRoute({
         },
       },
     },
+    500: {
+      description: "Server error",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+            details: z.string(),
+          }),
+        },
+      },
+    },
   },
 });
 
 events.openapi(getDeviceEventsRoute, async (c) => {
   const { deviceName } = c.req.valid("param");
-  const params = { ...c.req.valid("query"), deviceName };
+  const queryParams = c.req.valid("query");
   const sql = postgres(c.env.HYPERDRIVE.connectionString);
 
   try {
-    const { events, totalCount } = await fetchEvents(sql, params);
-    return c.json(formatResponse(events, totalCount, params));
+    // Convert string 'true'/'false' to boolean for hasMedia
+    const processedParams = {
+      ...queryParams,
+      deviceName,
+      hasMedia: queryParams.hasMedia
+        ? queryParams.hasMedia === "true"
+        : undefined,
+    };
+
+    const { events, totalCount } = await fetchEvents(sql, processedParams);
+    return c.json(formatResponse(events, totalCount, processedParams));
   } catch (error) {
     return c.json(
       {
