@@ -1,8 +1,8 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
-import type { Context } from "hono";
 import { DeviceSchema } from "../schemas/devices";
 import postgres from "postgres";
+import { fetchDeviceById } from "../services/devices";
 
 const route = new OpenAPIHono();
 

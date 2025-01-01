@@ -44,3 +44,4 @@ async function fetchDeviceById(sql: any, id: number) {
         throw error;
     }
 }
+export { fetchDeviceById }
