@@ -3,8 +3,9 @@ import { z } from "zod";
 import { DeviceSchema, DevicesResponseSchema, DeviceQuerySchema } from "../schemas/devices";
 import postgres from "postgres";
 import { fetchDeviceById, fetchDevices } from "../services/devices";
+import { CFEnv } from "../types";
 
-const route = new OpenAPIHono();
+const route = new OpenAPIHono<CFEnv>();
 
 /**
  * GET /devices/{deviceId}
@@ -56,7 +57,7 @@ const getDeviceRoute = createRoute({
  */
 route.openapi(getDeviceRoute, async (c) => {
     const { deviceId } = c.req.valid("param");
-    const sql = postgres(c.env.HYPERDRIVE.connectionString);
+    const sql = postgres(c.env?.HYPERDRIVE.connectionString);
 
     try {
         const deviceData = await fetchDeviceById(sql, Number(deviceId));

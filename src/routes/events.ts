@@ -99,7 +99,7 @@ const getEventsRoute = createRoute({
 
 events.openapi(getEventRoute, async (c) => {
   const { eventId } = c.req.valid("param");
-  const sql = postgres(c.env.HYPERDRIVE.connectionString);
+  const sql = postgres(c.env?.HYPERDRIVE.connectionString);
 
   try {
     const { event } = await fetchEventById(sql, Number(eventId));
