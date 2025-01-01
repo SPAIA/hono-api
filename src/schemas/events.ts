@@ -71,6 +71,9 @@ export const EventSchema = z.object({
   media: z.array(mediaDataSchema),
 });
 
+
+
+
 // Pagination schema
 export const PaginationSchema = z.object({
   currentPage: z.number(),

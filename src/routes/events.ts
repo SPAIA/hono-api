@@ -4,8 +4,9 @@ import { EventQuerySchema } from "../schemas/validation";
 import { fetchEventById, fetchEvents } from "../services/events";
 import { z } from "zod";
 import postgres from "postgres";
+import type { CFEnv } from "../types";
 
-const events = new OpenAPIHono();
+const events = new OpenAPIHono<CFEnv>();
 
 // Update EventQuerySchema to include hasMedia
 const ExtendedEventQuerySchema = EventQuerySchema.extend({
@@ -182,6 +183,7 @@ events.openapi(getDeviceEventsRoute, async (c) => {
 
   try {
     // Convert string 'true'/'false' to boolean for hasMedia
+
     const processedParams = {
       ...queryParams,
       deviceName,

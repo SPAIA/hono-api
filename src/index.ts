@@ -3,20 +3,17 @@ import { Queue } from "@cloudflare/workers-types";
 import { R2Bucket } from "@cloudflare/workers-types";
 import { OpenAPIHono } from "@hono/zod-openapi";
 
-export interface Env {
-  MY_QUEUE: Queue;
-  HYPERDRIVE: Hyperdrive;
-  BUCKET: R2Bucket;
-}
-
 // src/index.ts
 import { cors } from "hono/cors";
 import { prettyJSON } from "hono/pretty-json";
 import { events } from "./routes/events";
 import { swaggerUI } from "@hono/swagger-ui";
+import { CFEnv } from "./types";
+import imageRoutes from "./routes/images";
+import deviceRoutes from "./routes/devices";
 
 // const app = new Hono<{ Bindings: Env }>();
-const app = new OpenAPIHono();
+const app = new OpenAPIHono<CFEnv>();
 
 app.doc("/doc", {
   openapi: "3.0.0",
@@ -40,6 +37,8 @@ app.get("/", (c) =>
 
 // app.route("/events", events);
 app.route("/", events);
+app.route("/", imageRoutes);
+app.route("/", deviceRoutes);
 app.get("/ui", swaggerUI({ url: "/doc" }));
 
 export default app;

@@ -1,6 +1,7 @@
 import { R2Bucket, Hyperdrive } from "@cloudflare/workers-types";
+import type { Env as HonoEnv } from "hono";
 
-export interface Env {
+export interface CFEnv extends HonoEnv {
   HYPERDRIVE: Hyperdrive;
   BUCKET: R2Bucket;
 }
@@ -44,6 +45,11 @@ export interface Region {
   createdAt: Date;
   updatedAt: Date;
 }
+export interface Media {
+  id: number;
+  fileId: string;
+  source?: string;
+}
 // Add your data types here too - keeps everything clean
 export interface Event {
   id: number;
@@ -58,6 +64,7 @@ export interface Event {
   updatedBy: string | null;
   regions: Region[];
   sensorData: SensorData[];
+  media: Media[];
 }
 
 export interface Device {
