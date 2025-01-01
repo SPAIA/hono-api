@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { QuerySchema } from "./validation";
 
 export const DeviceSchema = z.object({
   id: z.number().int().describe("Unique identifier for the device"),
@@ -27,4 +28,18 @@ export const DeviceSchema = z.object({
 
 // Export TypeScript type derived from schema
 export type Device = z.infer<typeof DeviceSchema>;
+
+/**
+ * Response Schema for Paginated Devices
+ */
+export const DevicesResponseSchema = z.object({
+  devices: z.array(DeviceSchema).describe("List of devices"),
+  totalCount: z.number().describe("Total number of devices matching criteria"),
+});
+
+export const DeviceQuerySchema = QuerySchema.merge(z.object({
+  user: z.string().optional().describe("Filter devices by user"),
+  name: z.string().optional().describe("Filter devices by name"),
+  typeId: z.number().optional().describe("Filter devices by type ID"),
+}));
 
