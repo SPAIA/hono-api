@@ -19,14 +19,13 @@ async function fetchDeviceById(sql: any, id: number) {
               json_build_object(
                 'id', s.id,
                 'type', st.name,
-                'value', sd.value,
-                'lastUpdated', sd."updatedAt"
+                'lastUpdated', s."updatedAt"
               )
             )
-            FROM "Sensors" s
+            FROM "DeviceType_Sensors" ds
+            LEFT JOIN "Sensors" s on ds."sensorId" = s.id
             LEFT JOIN "SensorTypes" st ON s."typeId" = st.id
-            LEFT JOIN "SensorData" sd ON s.id = sd."sensorId"
-            WHERE s."deviceId" = d.id
+            WHERE ds."deviceTypeId" = st.id
           ),
           '[]'
         ) as sensors
