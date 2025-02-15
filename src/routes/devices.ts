@@ -257,7 +257,7 @@ route.openapi(createDeviceRoute, async (c) => {
     try {
         const newDevice = await insertDevice(sql, {
             ...deviceData,
-            userId: user.sub, // Associate device with user
+            createdBy: user.sub, // Associate device with user
         });
 
         return c.json(newDevice, 201);
