@@ -179,35 +179,55 @@ async function insertDevice(
   }
 ) {
   try {
-    const [newDevice] = await sql`
-        INSERT INTO "Devices" (
-            "typeId",
-            name,
-            serial,
-            notes,
-            "createdBy",
-            ip,
-            "createdAt",
-            "updatedAt"
-        ) VALUES (
-            ${device.typeId},
-            ${device.name},
-            ${device.serial || null},
-            ${device.notes || null},
-            ${device.createdBy},
-            ${device.ip || null},
-            NOW(),
-            NOW()
-        )
-        RETURNING 
-            id, "typeId", name, serial, notes, "createdBy", ip, "createdAt", "updatedAt";
-        `;
+    // Start a transaction to ensure both inserts succeed together
+    await sql.begin(async (tx) => {
+      // Insert into Devices table
+      const [newDevice] = await tx`
+                INSERT INTO "Devices" (
+                    "typeId",
+                    name,
+                    serial,
+                    notes,
+                    "createdBy",
+                    ip,
+                    "createdAt",
+                    "updatedAt"
+                ) VALUES (
+                    ${device.typeId},
+                    ${device.name},
+                    ${device.serial || null},
+                    ${device.notes || null},
+                    ${device.createdBy},
+                    ${device.ip || null},
+                    NOW(),
+                    NOW()
+                )
+                RETURNING 
+                    id, "typeId", name, serial, notes, "createdBy", ip, "createdAt", "updatedAt";
+            `;
 
-    return newDevice;
+      // Insert into UserDevices table
+      await tx`
+                INSERT INTO "UserDevices" (
+                    "deviceId",
+                    "user",
+                    "createdAt",
+                    "updatedAt"
+                ) VALUES (
+                    ${newDevice.id},
+                    ${device.createdBy},
+                    NOW(),
+                    NOW()
+                );
+            `;
+
+      return newDevice;
+    });
   } catch (error) {
     console.error("Error in insertDevice:", error);
     throw error;
   }
 }
+
 
 export { fetchDeviceById, fetchDevices, insertDevice }
