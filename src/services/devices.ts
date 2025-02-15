@@ -179,9 +179,10 @@ async function insertDevice(
   }
 ) {
   try {
-    console.log("device", device)
-    // Start a transaction to ensure both inserts succeed together
-    await sql.begin(async (tx) => {
+    console.log("device", device);
+
+    // Capture the result of the transaction
+    const newDevice = await sql.begin(async (tx) => {
       // Insert into Devices table
       const [newDevice] = await tx`
                 INSERT INTO "Devices" (
@@ -224,11 +225,14 @@ async function insertDevice(
 
       return newDevice;
     });
+
+    return newDevice;
   } catch (error) {
     console.error("Error in insertDevice:", error);
     throw error;
   }
 }
+
 
 
 export { fetchDeviceById, fetchDevices, insertDevice }

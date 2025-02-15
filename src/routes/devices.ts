@@ -250,15 +250,14 @@ const createDeviceRoute = createRoute({
 });
 
 route.openapi(createDeviceRoute, async (c) => {
-    const deviceData = c.req.valid("body");
+    const deviceData = c.req.valid("json");
     const sql = postgres(c.env.HYPERDRIVE.connectionString);
     const user = c.get('user') as SupabaseUser;
-    console.log("dev", deviceData);
     try {
         const device = {
             typeId: 1,
             name: deviceData.name ?? "Unknown Device", // Provide a fallback value
-            serial: null,
+            serial: crypto.randomUUID(),
             notes: deviceData.notes ?? null,
             createdBy: user.sub,
         };
@@ -266,7 +265,7 @@ route.openapi(createDeviceRoute, async (c) => {
 
         return c.json(newDevice, 201);
     } catch (error: any) {
-        console.error("Failed to create device:", error);
+        console.error("Failed to create device.... ", error);
         return c.json(
             {
                 error: "Internal server error",
