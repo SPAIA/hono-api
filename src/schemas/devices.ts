@@ -25,6 +25,13 @@ export const DeviceSchema = z.object({
     .nullable()
     .describe("Timestamp when the device was last seen"),
 });
+export const CreateDeviceSchema = z.object({
+  typeId: z.number().int().nullable().describe("Type ID of the device"),
+  name: z.string().nullable().describe("Name of the device"),
+  serial: z.string().nullable().describe("Serial number of the device"),
+  notes: z.string().nullable().describe("Additional notes about the device"),
+  createdBy: z.string().describe("User who created the device"),
+});
 
 // Export TypeScript type derived from schema
 export type Device = z.infer<typeof DeviceSchema>;

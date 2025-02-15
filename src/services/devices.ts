@@ -172,10 +172,10 @@ async function insertDevice(
   device: {
     typeId: number;
     name: string;
-    serial?: string;
-    notes?: string;
+    serial?: string | null;
+    notes?: string | null;
     createdBy: string;
-    ip?: string;
+    ip?: string | null;
   }
 ) {
   try {

@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
-import { DeviceSchema, DevicesResponseSchema, DeviceQuerySchema } from "../schemas/devices";
+import { DeviceSchema, DevicesResponseSchema, DeviceQuerySchema, CreateDeviceSchema } from "../schemas/devices";
 import postgres from "postgres";
 import { fetchDeviceById, fetchDevices, insertDevice } from "../services/devices";
 import { CFEnv, SupabaseUser } from "../types";
@@ -210,7 +210,7 @@ const createDeviceRoute = createRoute({
         body: {
             content: {
                 "application/json": {
-                    schema: DeviceSchema,
+                    schema: CreateDeviceSchema,
                 },
             },
         },
@@ -255,10 +255,14 @@ route.openapi(createDeviceRoute, async (c) => {
     const user = c.get('user') as SupabaseUser;
 
     try {
-        const newDevice = await insertDevice(sql, {
-            ...deviceData,
-            createdBy: user.sub, // Associate device with user
-        });
+        const device = {
+            typeId: 1,
+            name: deviceData.name ?? "Unknown Device", // Provide a fallback value
+            serial: null,
+            notes: deviceData.notes ?? null,
+            createdBy: user.sub,
+        };
+        const newDevice = await insertDevice(sql, device);
 
         return c.json(newDevice, 201);
     } catch (error: any) {
