@@ -30,7 +30,6 @@ export const CreateDeviceSchema = z.object({
   name: z.string().nullable().describe("Name of the device"),
   serial: z.string().nullable().describe("Serial number of the device"),
   notes: z.string().nullable().describe("Additional notes about the device"),
-  createdBy: z.string().describe("User who created the device"),
 });
 
 // Export TypeScript type derived from schema

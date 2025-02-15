@@ -179,6 +179,7 @@ async function insertDevice(
   }
 ) {
   try {
+    console.log("device", device)
     // Start a transaction to ensure both inserts succeed together
     await sql.begin(async (tx) => {
       // Insert into Devices table

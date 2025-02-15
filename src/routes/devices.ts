@@ -253,7 +253,7 @@ route.openapi(createDeviceRoute, async (c) => {
     const deviceData = c.req.valid("body");
     const sql = postgres(c.env.HYPERDRIVE.connectionString);
     const user = c.get('user') as SupabaseUser;
-
+    console.log("dev", deviceData);
     try {
         const device = {
             typeId: 1,
