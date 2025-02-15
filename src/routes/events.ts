@@ -207,4 +207,5 @@ events.openapi(getDeviceEventsRoute, async (c) => {
   }
 });
 
+
 export { events, getEventsRoute, getDeviceEventsRoute };

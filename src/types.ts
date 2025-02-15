@@ -80,3 +80,12 @@ export interface Device {
   ip: string | null;
   lastSeen: Date | null;
 }
+export type SupabaseUser = {
+  sub: string           // User UUID
+  email?: string
+  aud: string          // 'authenticated'
+  role?: string        // Usually 'authenticated'
+  exp: number          // Token expiration timestamp
+  iat: number          // Token issued at timestamp
+  session_id?: string
+}

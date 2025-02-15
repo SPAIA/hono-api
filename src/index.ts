@@ -11,9 +11,11 @@ import { swaggerUI } from "@hono/swagger-ui";
 import { CFEnv } from "./types";
 import imageRoutes from "./routes/images";
 import deviceRoutes from "./routes/devices";
+import myRoutes from "./routes/my";
 
 // const app = new Hono<{ Bindings: Env }>();
 const app = new OpenAPIHono<CFEnv>();
+
 
 app.doc("/doc", {
   openapi: "3.0.0",
@@ -39,6 +41,7 @@ app.get("/", (c) =>
 app.route("/", events);
 app.route("/", imageRoutes);
 app.route("/", deviceRoutes);
+app.route("/", myRoutes);
 app.get("/ui", swaggerUI({ url: "/doc" }));
 
 export default app;

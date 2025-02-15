@@ -2,10 +2,13 @@ import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 import { DeviceSchema, DevicesResponseSchema, DeviceQuerySchema } from "../schemas/devices";
 import postgres from "postgres";
-import { fetchDeviceById, fetchDevices } from "../services/devices";
-import { CFEnv } from "../types";
+import { fetchDeviceById, fetchDevices, insertDevice } from "../services/devices";
+import { CFEnv, SupabaseUser } from "../types";
+import { QuerySchema } from "../schemas/validation";
+import { supabaseAuthMiddleware } from "../middleware/supabaseAuth";
 
 const route = new OpenAPIHono<CFEnv>();
+route.use('/my/*', supabaseAuthMiddleware);
 
 /**
  * GET /devices/{deviceId}
@@ -136,5 +139,141 @@ route.openapi(getDevicesRoute, async (c) => {
         await sql.end();
     }
 });
+
+const getMyDevicesRoute = createRoute({
+    method: "get",
+    path: "/my/devices",
+    tags: ["devices", "My"],
+    summary: "Get a list of the users devices with pagination",
+    request: {
+        query: QuerySchema,
+    },
+    responses: {
+        200: {
+            description: "Devices retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: DevicesResponseSchema,
+                },
+            },
+        },
+        500: {
+            description: "Internal Server Error",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        error: z.string(),
+                        details: z.string(),
+                    }),
+                },
+            },
+        },
+    },
+});
+route.openapi(getMyDevicesRoute, async (c) => {
+    const queryParams = c.req.valid("query");
+    const sql = postgres(c.env.HYPERDRIVE.connectionString);
+    const user = c.get('user') as SupabaseUser;
+    try {
+        const devicesData = await fetchDevices(sql, { ...queryParams, user: user.sub });
+        const totalPages = Math.ceil(devicesData.totalCount / queryParams.limit);
+        return c.json({
+
+            data: devicesData.devices,
+            pagination: {
+                currentPage: queryParams.page,
+                totalPages,
+                totalCount: devicesData.totalCount,
+                hasNextPage: queryParams.page < totalPages,
+                hasPrevPage: queryParams.page > 1,
+            },
+        });
+    } catch (error: any) {
+        console.error("Failed to fetch devices:", error);
+        return c.json(
+            {
+                error: "Internal server error",
+                details: error.message,
+            },
+            500
+        );
+    } finally {
+        await sql.end();
+    }
+});
+const createDeviceRoute = createRoute({
+    method: "post",
+    path: "/my/device",
+    tags: ["devices", "My"],
+    summary: "Create a new device",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: DeviceSchema,
+                },
+            },
+        },
+    },
+    responses: {
+        201: {
+            description: "Device created successfully",
+            content: {
+                "application/json": {
+                    schema: DeviceSchema,
+                },
+            },
+        },
+        400: {
+            description: "Invalid request data",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        error: z.string(),
+                        details: z.string().optional(),
+                    }),
+                },
+            },
+        },
+        500: {
+            description: "Internal Server Error",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        error: z.string(),
+                        details: z.string(),
+                    }),
+                },
+            },
+        },
+    },
+});
+
+route.openapi(createDeviceRoute, async (c) => {
+    const deviceData = c.req.valid("body");
+    const sql = postgres(c.env.HYPERDRIVE.connectionString);
+    const user = c.get('user') as SupabaseUser;
+
+    try {
+        const newDevice = await insertDevice(sql, {
+            ...deviceData,
+            userId: user.sub, // Associate device with user
+        });
+
+        return c.json(newDevice, 201);
+    } catch (error: any) {
+        console.error("Failed to create device:", error);
+        return c.json(
+            {
+                error: "Internal server error",
+                details: error.message,
+            },
+            500
+        );
+    } finally {
+        await sql.end();
+    }
+});
+
 
 export default route;

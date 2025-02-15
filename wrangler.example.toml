@@ -13,5 +13,7 @@ binding = "BUCKET"
 bucket_name = ""
 preview_bucket_name = ""
 
+[vars]
+SUPABASE_PROJECT_REF="xxx"
 
 
