@@ -1,9 +1,14 @@
 import { R2Bucket, Hyperdrive } from "@cloudflare/workers-types";
 import type { Env as HonoEnv } from "hono";
 
-export interface CFEnv extends HonoEnv {
+import { Env } from '@cloudflare/workers-types';
+
+export interface CFEnv extends Env {
   HYPERDRIVE: Hyperdrive;
   BUCKET: R2Bucket;
+  Variables: {
+    user: SupabaseUser;
+  };
 }
 export interface Sensor {
   id: number;

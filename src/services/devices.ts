@@ -182,7 +182,7 @@ async function insertDevice(
     console.log("device", device);
 
     // Capture the result of the transaction
-    const newDevice = await sql.begin(async (tx) => {
+    const newDevice = await sql.begin(async (tx: any) => {
       // Insert into Devices table
       const [newDevice] = await tx`
                 INSERT INTO "Devices" (
@@ -235,4 +235,44 @@ async function insertDevice(
 
 
 
-export { fetchDeviceById, fetchDevices, insertDevice }
+async function deleteDevice(
+  sql: any,
+  id: number,
+  user: string
+) {
+  try {
+    const deletedDevice = await sql.begin(async (tx: any) => {
+      // Verify ownership and delete from UserDevices
+      const [ownership] = await tx`
+        DELETE FROM "UserDevices"
+        WHERE "deviceId" = ${id} 
+        AND "user" = ${user}
+        RETURNING "deviceId"
+      `;
+
+      if (!ownership) {
+        const error = new Error("Device not found or unauthorized");
+        (error as any).status = 404;
+        throw error;
+      }
+
+      // Delete from Devices
+      const [device] = await tx`
+        DELETE FROM "Devices"
+        WHERE id = ${id}
+        RETURNING 
+          id, "typeId", name, serial, notes, 
+          "createdBy", ip, "createdAt", "updatedAt"
+      `;
+
+      return device;
+    });
+
+    return deletedDevice;
+  } catch (error) {
+    console.error("Error in deleteDevice:", error);
+    throw error;
+  }
+}
+
+export { fetchDeviceById, fetchDevices, insertDevice, deleteDevice }

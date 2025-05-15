@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 import { DeviceSchema, DevicesResponseSchema, DeviceQuerySchema, CreateDeviceSchema } from "../schemas/devices";
 import postgres from "postgres";
-import { fetchDeviceById, fetchDevices, insertDevice } from "../services/devices";
+import { fetchDeviceById, fetchDevices, insertDevice, deleteDevice } from "../services/devices";
 import { CFEnv, SupabaseUser } from "../types";
 import { QuerySchema } from "../schemas/validation";
 import { supabaseAuthMiddleware } from "../middleware/supabaseAuth";
@@ -14,7 +14,7 @@ route.use('/my/*', supabaseAuthMiddleware);
  * GET /devices/{deviceId}
  * Fetch device information by its ID.
  */
-const getDeviceRoute = createRoute({
+const getDeviceRoute = createRoute<{ Env: CFEnv }, never>({
     method: "get",
     path: "/devices/{deviceId}",
     tags: ["devices"],
@@ -60,7 +60,7 @@ const getDeviceRoute = createRoute({
  */
 route.openapi(getDeviceRoute, async (c) => {
     const { deviceId } = c.req.valid("param");
-    const sql = postgres(c.env?.HYPERDRIVE.connectionString);
+    const sql = postgres(c.env?.HYPERDRIVE?.connectionString ?? '');
 
     try {
         const deviceData = await fetchDeviceById(sql, Number(deviceId));
@@ -69,7 +69,7 @@ route.openapi(getDeviceRoute, async (c) => {
         return c.json(
             {
                 error: "Internal server error",
-                details: error.message,
+                details: error instanceof Error ? error.message : 'Unknown error',
             },
             500
         );
@@ -82,7 +82,7 @@ route.openapi(getDeviceRoute, async (c) => {
  * GET /devices
  * Fetch a paginated list of devices with filtering and sorting options.
  */
-const getDevicesRoute = createRoute({
+const getDevicesRoute = createRoute<{ Env: CFEnv }>({
     method: "get",
     path: "/devices",
     tags: ["devices"],
@@ -118,7 +118,7 @@ const getDevicesRoute = createRoute({
  */
 route.openapi(getDevicesRoute, async (c) => {
     const queryParams = c.req.valid("query");
-    const sql = postgres(c.env.HYPERDRIVE.connectionString);
+    const sql = postgres(c.env?.HYPERDRIVE?.connectionString ?? '');
 
     try {
         const devicesData = await fetchDevices(sql, queryParams);
@@ -172,7 +172,7 @@ const getMyDevicesRoute = createRoute({
 });
 route.openapi(getMyDevicesRoute, async (c) => {
     const queryParams = c.req.valid("query");
-    const sql = postgres(c.env.HYPERDRIVE.connectionString);
+    const sql = postgres(c.env?.HYPERDRIVE?.connectionString ?? '');
     const user = c.get('user') as SupabaseUser;
     try {
         const devicesData = await fetchDevices(sql, { ...queryParams, user: user.sub });
@@ -251,7 +251,7 @@ const createDeviceRoute = createRoute({
 
 route.openapi(createDeviceRoute, async (c) => {
     const deviceData = c.req.valid("json");
-    const sql = postgres(c.env.HYPERDRIVE.connectionString);
+    const sql = postgres(c.env?.HYPERDRIVE?.connectionString ?? '');
     const user = c.get('user') as SupabaseUser;
     try {
         const device = {
@@ -261,7 +261,8 @@ route.openapi(createDeviceRoute, async (c) => {
             notes: deviceData.notes ?? null,
             createdBy: user.sub,
         };
-        const newDevice = await insertDevice(sql, device);
+        const result = await insertDevice(sql, device);
+        const newDevice = Array.isArray(result) ? result[0] : result;
 
         return c.json(newDevice, 201);
     } catch (error: any) {
@@ -278,5 +279,150 @@ route.openapi(createDeviceRoute, async (c) => {
     }
 });
 
+
+/**
+ * DELETE /my/devices/{deviceId}
+ * Delete a device by its ID (owner only)
+ */
+const deleteDeviceRoute = createRoute<{ Env: CFEnv }>({
+    method: "delete",
+    path: "/my/devices/{deviceId}",
+    tags: ["devices", "My"],
+    summary: "Delete a device by ID",
+    request: {
+        params: z.object({
+            deviceId: z.string().describe("Device unique identifier"),
+        }),
+    },
+    responses: {
+        204: {
+            description: "Device deleted successfully",
+        },
+        404: {
+            content: {
+                "application/json": {
+                    schema: z.object({ message: z.string() }),
+                },
+            },
+            description: "Device not found",
+        },
+        500: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        error: z.string(),
+                        details: z.string().optional(),
+                    }),
+                },
+            },
+            description: "Internal server error",
+        },
+    },
+});
+
+route.openapi(deleteDeviceRoute, async (c) => {
+    const { deviceId } = c.req.valid("param");
+    const sql = postgres(c.env?.HYPERDRIVE?.connectionString ?? '');
+    const user = c.get('user') as SupabaseUser;
+
+    try {
+        // First verify device ownership
+        const device = await fetchDeviceById(sql, Number(deviceId));
+        if (!device?.device || device.device.createdBy !== user.sub) {
+            return c.json({ message: "Device not found" }, 404);
+        }
+
+        await deleteDevice(sql, Number(deviceId), user.sub);
+        return c.body(null, 204);
+    } catch (error) {
+        console.error("Failed to delete device:", error);
+        return c.json(
+            {
+                error: "Internal server error",
+                details: error instanceof Error ? error.message : 'Unknown error'
+            },
+            500
+        );
+    } finally {
+        await sql.end();
+    }
+});
+
+/**
+ * GET /devices/user/{userId}
+ * Fetch devices for a specific user
+ */
+const getUserDevicesRoute = createRoute<{ Env: CFEnv }>({
+    method: "get",
+    path: "/devices/user/{userId}",
+    tags: ["devices"],
+    summary: "Get devices for a specific user",
+    request: {
+        params: z.object({
+            userId: z.string().describe("User ID to fetch devices for"),
+        }),
+        query: QuerySchema,
+    },
+    responses: {
+        200: {
+            description: "Devices retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: DevicesResponseSchema,
+                },
+            },
+        },
+        403: {
+            description: "Forbidden - insufficient permissions",
+            content: {
+                "application/json": {
+                    schema: z.object({ message: z.string() }),
+                },
+            },
+        },
+        500: {
+            description: "Internal Server Error",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        error: z.string(),
+                        details: z.string(),
+                    }),
+                },
+            },
+        },
+    },
+});
+
+route.openapi(getUserDevicesRoute, async (c) => {
+    const { userId } = c.req.valid("param");
+    const queryParams = c.req.valid("query");
+    const sql = postgres(c.env?.HYPERDRIVE?.connectionString ?? '');
+    try {
+        const devicesData = await fetchDevices(sql, { ...queryParams, user: userId });
+        const totalPages = Math.ceil(devicesData.totalCount / queryParams.limit);
+        return c.json({
+            data: devicesData.devices,
+            pagination: {
+                currentPage: queryParams.page,
+                totalPages,
+                totalCount: devicesData.totalCount,
+                hasNextPage: queryParams.page < totalPages,
+                hasPrevPage: queryParams.page > 1,
+            },
+        });
+    } catch (error: any) {
+        console.error("Failed to fetch user devices:", error);
+        return c.json(
+            {
+                error: "Internal server error",
+                details: error.message,
+            },
+            500
+        );
+    } finally {
+        await sql.end();
+    }
+});
 
 export default route;

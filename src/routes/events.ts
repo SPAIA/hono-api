@@ -1,12 +1,19 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
+import type { RouteConfig } from "@hono/zod-openapi";
 import { EventResponseSchema, EventsResponseSchema } from "../schemas/events";
 import { EventQuerySchema } from "../schemas/validation";
 import { fetchEventById, fetchEvents } from "../services/events";
-import { z } from "zod";
 import postgres from "postgres";
 import type { CFEnv } from "../types";
+import { z } from "@hono/zod-openapi";
 
 const events = new OpenAPIHono<CFEnv>();
+
+// Error response schema
+const ErrorResponseSchema = z.object({
+  error: z.string(),
+  details: z.string(),
+});
 
 // Update EventQuerySchema to include hasMedia
 const ExtendedEventQuerySchema = EventQuerySchema.extend({
@@ -51,14 +58,19 @@ const getEventRoute = createRoute({
         },
       },
     },
+    404: {
+      description: "Not found",
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
     500: {
       description: "Server error",
       content: {
         "application/json": {
-          schema: z.object({
-            error: z.string(),
-            details: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -87,10 +99,7 @@ const getEventsRoute = createRoute({
       description: "Server error",
       content: {
         "application/json": {
-          schema: z.object({
-            error: z.string(),
-            details: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -99,16 +108,23 @@ const getEventsRoute = createRoute({
 
 events.openapi(getEventRoute, async (c) => {
   const { eventId } = c.req.valid("param");
-  const sql = postgres(c.env?.HYPERDRIVE.connectionString);
+  const sql = postgres(c.env?.HYPERDRIVE?.connectionString);
 
   try {
-    const { event } = await fetchEventById(sql, Number(eventId));
-    return c.json({ data: event });
+    const result = await fetchEventById(sql, Number(eventId));
+    if (!result) {
+      return c.json(
+        { error: "Not found", details: "Event not found" },
+        404
+      );
+    }
+    return c.json({ data: result.event });
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
     return c.json(
       {
         error: "Internal server error",
-        details: error.message,
+        details: errorMessage,
       },
       500
     );
@@ -119,22 +135,23 @@ events.openapi(getEventRoute, async (c) => {
 
 events.openapi(getEventsRoute, async (c) => {
   const params = c.req.valid("query");
-  const sql = postgres(c.env.HYPERDRIVE.connectionString);
+  const sql = postgres(c.env?.HYPERDRIVE?.connectionString);
 
   try {
-    // Convert string 'true'/'false' to boolean for hasMedia
     const processedParams = {
       ...params,
       hasMedia: params.hasMedia ? params.hasMedia === "true" : undefined,
     };
 
     const { events, totalCount } = await fetchEvents(sql, processedParams);
-    return c.json(formatResponse(events, totalCount, processedParams));
+    const response = formatResponse(events, totalCount, processedParams);
+    return c.json(response);
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
     return c.json(
       {
         error: "Internal server error",
-        details: error.message,
+        details: errorMessage,
       },
       500
     );
@@ -166,10 +183,7 @@ const getDeviceEventsRoute = createRoute({
       description: "Server error",
       content: {
         "application/json": {
-          schema: z.object({
-            error: z.string(),
-            details: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -179,26 +193,24 @@ const getDeviceEventsRoute = createRoute({
 events.openapi(getDeviceEventsRoute, async (c) => {
   const { deviceName } = c.req.valid("param");
   const queryParams = c.req.valid("query");
-  const sql = postgres(c.env.HYPERDRIVE.connectionString);
+  const sql = postgres(c.env?.HYPERDRIVE?.connectionString);
 
   try {
-    // Convert string 'true'/'false' to boolean for hasMedia
-
     const processedParams = {
       ...queryParams,
       deviceName,
-      hasMedia: queryParams.hasMedia
-        ? queryParams.hasMedia === "true"
-        : undefined,
+      hasMedia: queryParams.hasMedia ? queryParams.hasMedia === "true" : undefined,
     };
 
     const { events, totalCount } = await fetchEvents(sql, processedParams);
-    return c.json(formatResponse(events, totalCount, processedParams));
+    const response = formatResponse(events, totalCount, processedParams);
+    return c.json(response);
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
     return c.json(
       {
         error: "Internal server error",
-        details: error.message,
+        details: errorMessage,
       },
       500
     );
@@ -206,6 +218,5 @@ events.openapi(getDeviceEventsRoute, async (c) => {
     await sql.end();
   }
 });
-
 
 export { events, getEventsRoute, getDeviceEventsRoute };
