@@ -12,7 +12,11 @@ async function fetchDeviceById(sql: any, id: number) {
         d."createdBy",
         d."updatedAt",
         d.ip,
-        d."lastSeen",
+        (
+          SELECT MAX(e."time") 
+          FROM "Events" e 
+          WHERE e."deviceId" = d.id
+        ) as "lastSeen",
         COALESCE(
           (
             SELECT json_agg(
@@ -119,7 +123,11 @@ async function fetchDevices(
       d."createdBy",
       d."updatedAt",
       d.ip,
-      d."lastSeen",
+      (
+        SELECT MAX(e."time") 
+        FROM "Events" e 
+        WHERE e."deviceId" = d.id
+      ) as "lastSeen",
       COALESCE(
         (
           SELECT json_agg(

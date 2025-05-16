@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import type { RouteConfig } from "@hono/zod-openapi";
 import { EventResponseSchema, EventsResponseSchema } from "../schemas/events";
 import { EventQuerySchema } from "../schemas/validation";
-import { fetchEventById, fetchEvents } from "../services/events";
+import { fetchEventById, fetchEvents, deleteEvent } from "../services/events";
 import postgres from "postgres";
 import type { CFEnv } from "../types";
 import { z } from "@hono/zod-openapi";
@@ -279,4 +279,64 @@ events.openapi(getUserEventsRoute, async (c) => {
   }
 });
 
-export { events, getEventsRoute, getDeviceEventsRoute, getUserEventsRoute };
+const deleteEventRoute = createRoute({
+  method: "delete",
+  path: "/events/{eventId}",
+  tags: ["Events"],
+  summary: "Delete an event by ID",
+  request: {
+    params: z.object({
+      eventId: z.string().describe("Event unique identifier"),
+    }),
+  },
+  responses: {
+    204: {
+      description: "Event deleted successfully",
+    },
+    404: {
+      description: "Event not found",
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Server error",
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+events.openapi(deleteEventRoute, async (c) => {
+  const { eventId } = c.req.valid("param");
+  const sql = postgres(c.env?.HYPERDRIVE?.connectionString);
+
+  try {
+    const deleted = await deleteEvent(sql, Number(eventId));
+    if (!deleted) {
+      return c.json(
+        { error: "Not found", details: "Event not found" },
+        404
+      );
+    }
+    return c.body(null, 204);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    return c.json(
+      {
+        error: "Internal server error",
+        details: errorMessage,
+      },
+      500
+    );
+  } finally {
+    await sql.end();
+  }
+});
+
+export { events, getEventsRoute, getDeviceEventsRoute, getUserEventsRoute, deleteEventRoute };

@@ -21,9 +21,9 @@ async function fetchEvents(
 
   if (params.userId) {
     conditions.push(sql`EXISTS (
-      SELECT 1 FROM "UserDevices" ud 
+      SELECT 1 FROM "UserDevices" ud
       WHERE ud."deviceId" = e."deviceId" 
-      AND ud."userId" = ${params.userId}
+      AND ud."user" = ${params.userId}
     )`);
   } else if (params.deviceId) {
     conditions.push(sql`e."deviceId" = ${params.deviceId}`);
@@ -244,4 +244,24 @@ async function fetchEventById(sql: any, id: number) {
   }
 }
 
-export { fetchEvents, fetchEventById };
+async function deleteEvent(sql: any, eventId: number) {
+  try {
+    // First delete related records to maintain referential integrity
+    await sql`DELETE FROM "EventMedia" WHERE "eventId" = ${eventId}`;
+    await sql`DELETE FROM "Regions" WHERE "eventId" = ${eventId}`;
+    await sql`DELETE FROM "SensorData" WHERE "eventId" = ${eventId}`;
+
+    // Then delete the event itself
+    const result = await sql`DELETE FROM "Events" WHERE id = ${eventId} RETURNING id`;
+
+    if (result.length === 0) {
+      return false; // No rows deleted
+    }
+    return true;
+  } catch (error) {
+    console.error("Error in deleteEvent:", error);
+    throw error;
+  }
+}
+
+export { fetchEvents, fetchEventById, deleteEvent };
