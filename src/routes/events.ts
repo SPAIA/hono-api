@@ -219,4 +219,64 @@ events.openapi(getDeviceEventsRoute, async (c) => {
   }
 });
 
-export { events, getEventsRoute, getDeviceEventsRoute };
+const getUserEventsRoute = createRoute({
+  method: "get",
+  path: "/events/user/{userId}",
+  tags: ["Events"],
+  summary: "Get events from all devices belonging to a user",
+  request: {
+    params: z.object({
+      userId: z.string(),
+    }),
+    query: ExtendedEventQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Success",
+      content: {
+        "application/json": {
+          schema: EventsResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Server error",
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+events.openapi(getUserEventsRoute, async (c) => {
+  const { userId } = c.req.valid("param");
+  const queryParams = c.req.valid("query");
+  const sql = postgres(c.env?.HYPERDRIVE?.connectionString);
+
+  try {
+    const processedParams = {
+      ...queryParams,
+      userId,
+      hasMedia: queryParams.hasMedia ? queryParams.hasMedia === "true" : undefined,
+    };
+
+    const { events, totalCount } = await fetchEvents(sql, processedParams);
+    const response = formatResponse(events, totalCount, processedParams);
+    return c.json(response);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    return c.json(
+      {
+        error: "Internal server error",
+        details: errorMessage,
+      },
+      500
+    );
+  } finally {
+    await sql.end();
+  }
+});
+
+export { events, getEventsRoute, getDeviceEventsRoute, getUserEventsRoute };

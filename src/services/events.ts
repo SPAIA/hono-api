@@ -7,6 +7,7 @@ async function fetchEvents(
     order: string;
     deviceId?: number;
     deviceName?: string;
+    userId?: string;
     hasMedia?: boolean;
   }
 ) {
@@ -18,7 +19,13 @@ async function fetchEvents(
   let whereClause = sql``;
   let conditions = [];
 
-  if (params.deviceId) {
+  if (params.userId) {
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM "UserDevices" ud 
+      WHERE ud."deviceId" = e."deviceId" 
+      AND ud."userId" = ${params.userId}
+    )`);
+  } else if (params.deviceId) {
     conditions.push(sql`e."deviceId" = ${params.deviceId}`);
   } else if (params.deviceName) {
     conditions.push(sql`d."name" = ${params.deviceName}`);
