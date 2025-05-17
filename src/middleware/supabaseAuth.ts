@@ -19,6 +19,11 @@ export const supabaseAuthMiddleware = async (c: Context, next: Next) => {
     }
 
     try {
+        if (!c.env.SUPABASE_PROJECT_REF) {
+            console.error('SUPABASE_PROJECT_REF is not defined');
+            return c.json({ error: 'Server configuration error' }, 500);
+        }
+
         const decoded = await jwtVerify(
             token,
             new TextEncoder().encode(jwtSecret),
@@ -30,10 +35,17 @@ export const supabaseAuthMiddleware = async (c: Context, next: Next) => {
 
         console.log('JWT Payload:', decoded.payload);
         c.set('user', decoded.payload);
+        await next();
     } catch (error) {
         console.error('JWT Verification Error:', error);
-        return c.text('Invalid or expired token', 401);
+        if (error instanceof Error) {
+            if (error.message.includes('JWTExpired')) {
+                return c.json({ error: 'Token expired' }, 401);
+            }
+            if (error.message.includes('JWTInvalid')) {
+                return c.json({ error: 'Invalid token' }, 401);
+            }
+        }
+        return c.json({ error: 'Authentication failed' }, 401);
     }
-
-    await next();
 };
