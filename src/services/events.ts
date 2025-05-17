@@ -264,4 +264,26 @@ async function deleteEvent(sql: any, eventId: number) {
   }
 }
 
-export { fetchEvents, fetchEventById, deleteEvent };
+async function verifyEvent(sql: any, eventId: string, userId: string) {
+  console.log("verify ", userId)
+  try {
+    const result = await sql`
+      UPDATE "Events"
+      SET 
+        "verifiedBy" = ${userId},
+        "verifiedAt" = NOW()
+      WHERE id = ${eventId}
+      RETURNING *
+    `;
+
+    if (result.length === 0) {
+      return null;
+    }
+    return { event: result[0] };
+  } catch (error) {
+    console.error("Error in verifyEvent:", error);
+    throw error;
+  }
+}
+
+export { fetchEvents, fetchEventById, deleteEvent, verifyEvent };

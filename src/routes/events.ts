@@ -2,10 +2,17 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import type { RouteConfig } from "@hono/zod-openapi";
 import { EventResponseSchema, EventsResponseSchema } from "../schemas/events";
 import { EventQuerySchema } from "../schemas/validation";
-import { fetchEventById, fetchEvents, deleteEvent } from "../services/events";
+import { fetchEventById, fetchEvents, deleteEvent, verifyEvent } from "../services/events";
 import postgres from "postgres";
 import type { CFEnv } from "../types";
 import { z } from "@hono/zod-openapi";
+import { supabaseAuthMiddleware } from "../middleware/supabaseAuth";
+
+type SupabaseUser = {
+  sub: string;
+  email?: string;
+  [key: string]: unknown;
+};
 
 const events = new OpenAPIHono<CFEnv>();
 
@@ -339,4 +346,96 @@ events.openapi(deleteEventRoute, async (c) => {
   }
 });
 
-export { events, getEventsRoute, getDeviceEventsRoute, getUserEventsRoute, deleteEventRoute };
+const verifyEventRoute = createRoute({
+  method: "patch",
+  path: "/events/{eventId}/verify",
+  tags: ["Events"],
+  summary: "Verify an event by ID",
+  request: {
+    params: z.object({
+      eventId: z.string().describe("Event unique identifier"),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Event verified successfully",
+      content: {
+        "application/json": {
+          schema: EventResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: "Event not found",
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Server error",
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+events.openapi(verifyEventRoute, async (c, next) => {
+  console.log("Starting verify event request");
+  await supabaseAuthMiddleware(c, next);
+  console.log("After middleware, status:", c.res.status);
+  if (c.res.status !== 200) {
+    console.log("Middleware blocked request with status:", c.res.status);
+    return;
+  }
+
+  const { eventId } = c.req.valid("param");
+  console.log("Event ID from params:", eventId);
+  const user = c.get('user') as SupabaseUser;
+  console.log("Authenticated user:", user);
+  if (!user?.sub) {
+    return c.json(
+      { error: "Unauthorized", details: "User not authenticated" },
+      401
+    );
+  }
+  const userId = user.sub;
+  const sql = postgres(c.env?.HYPERDRIVE?.connectionString);
+
+  try {
+    const eventIdNum = Number(eventId);
+    if (isNaN(eventIdNum)) {
+      return c.json(
+        { error: "Bad request", details: "Invalid event ID format" },
+        400
+      );
+    }
+    console.log("Verifying event:", eventIdNum, "for user:", userId);
+    const result = await verifyEvent(sql, eventIdNum.toString(), userId);
+    if (!result) {
+      console.log("Event not found:", eventIdNum);
+      return c.json(
+        { error: "Not found", details: "Event not found" },
+        404
+      );
+    }
+    return c.json({ data: result.event });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    return c.json(
+      {
+        error: "Internal server error",
+        details: errorMessage,
+      },
+      500
+    );
+  } finally {
+    await sql.end();
+  }
+});
+
+export { events, getEventsRoute, getDeviceEventsRoute, getUserEventsRoute, deleteEventRoute, verifyEventRoute };
