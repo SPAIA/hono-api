@@ -115,11 +115,11 @@ submissions.openapi(createSubmissionRoute, async (c) => {
     const sql = postgres(connectionString);
 
     try {
-        const result = await createSubmission(sql, submissionData, user.sub);
+        const { submission, sightings } = await createSubmission(sql, submissionData, user.sub);
         return c.json({
             data: {
-                ...result.submission,
-                sightings: []
+                ...submission,
+                sightings: sightings || []
             }
         }, 201);
     } catch (error) {

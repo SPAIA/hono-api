@@ -52,14 +52,18 @@ export const SubmissionsResponseSchema = z.object({
 });
 
 // Request schemas
-export const CreateSubmissionSchema = SubmissionSchema.omit({
-    id: true,
-    created_at: true
-});
-
-export const UpdateSubmissionSchema = CreateSubmissionSchema.partial();
-
 export const CreateSightingSchema = SightingSchema.omit({
     id: true,
     created_at: true
 });
+
+export const CreateSubmissionSchema = SubmissionSchema.omit({
+    id: true,
+    created_at: true
+}).extend({
+    sightings: z.array(CreateSightingSchema.omit({
+        submission_id: true
+    })).optional()
+});
+
+export const UpdateSubmissionSchema = CreateSubmissionSchema.partial();

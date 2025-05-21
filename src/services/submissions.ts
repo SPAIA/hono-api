@@ -13,33 +13,65 @@ async function createSubmission(
     userId: string
 ) {
     try {
-        const result = await sql`
-      INSERT INTO submissions (
-        user_id,
-        type,
-        date,
-        time,
-        location,
-        weather,
-        temperature,
-        wind,
-        season,
-        consent
-      ) VALUES (
-        ${userId},
-        ${submissionData.type},
-        ${submissionData.date},
-        ${submissionData.time},
-        ${submissionData.location},
-        ${submissionData.weather},
-        ${submissionData.temperature},
-        ${submissionData.wind},
-        ${submissionData.season},
-        ${submissionData.consent ?? false}
-      ) RETURNING *
-    `;
+        const [submission, sightings] = await sql.begin(async sql => {
+            // Insert submission first
+            const [submission] = await sql`
+                INSERT INTO submissions (
+                    user_id,
+                    type,
+                    date,
+                    time,
+                    location,
+                    weather,
+                    temperature,
+                    wind,
+                    season,
+                    consent
+                ) VALUES (
+                    ${userId},
+                    ${submissionData.type},
+                    ${submissionData.date},
+                    ${submissionData.time},
+                    ${submissionData.location},
+                    ${submissionData.weather},
+                    ${submissionData.temperature},
+                    ${submissionData.wind},
+                    ${submissionData.season},
+                    ${submissionData.consent ?? false}
+                ) RETURNING *
+            `;
 
-        return { submission: result[0] };
+            // Insert sightings if provided
+            const sightings = [];
+            if (submissionData.sightings && submissionData.sightings.length > 0) {
+                for (const sighting of submissionData.sightings) {
+                    const [s] = await sql`
+                        INSERT INTO sightings (
+                            submission_id,
+                            group_name,
+                            estimated_count,
+                            behavior,
+                            location_seen,
+                            notes,
+                            photo_url
+                        ) VALUES (
+                            ${submission.id},
+                            ${sighting.group_name},
+                            ${sighting.estimated_count},
+                            ${sighting.behavior},
+                            ${sighting.location_seen},
+                            ${sighting.notes},
+                            ${sighting.photo_url}
+                        ) RETURNING *
+                    `;
+                    sightings.push(s);
+                }
+            }
+
+            return [submission, sightings];
+        });
+
+        return { submission, sightings };
     } catch (error) {
         console.error("Error creating submission:", error);
         throw error;
