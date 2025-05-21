@@ -348,7 +348,7 @@ events.openapi(deleteEventRoute, async (c) => {
 
 const verifyEventRoute = createRoute({
   method: "patch",
-  path: "/events/{eventId}/verify",
+  path: "/event/{eventId}/verify",  // Changed from /events/ to /event/
   tags: ["Events"],
   summary: "Verify an event by ID",
   request: {
@@ -384,25 +384,20 @@ const verifyEventRoute = createRoute({
   },
 });
 
-events.openapi(verifyEventRoute, async (c, next) => {
+events.use('/event/:eventId/verify', supabaseAuthMiddleware);
+events.openapi(verifyEventRoute, async (c) => {
   console.log("Starting verify event request");
-  await supabaseAuthMiddleware(c, next);
-  console.log("After middleware, status:", c.res.status);
-  if (c.res.status !== 200) {
-    console.log("Middleware blocked request with status:", c.res.status);
-    return;
-  }
-
-  const { eventId } = c.req.valid("param");
-  console.log("Event ID from params:", eventId);
   const user = c.get('user') as SupabaseUser;
-  console.log("Authenticated user:", user);
   if (!user?.sub) {
     return c.json(
       { error: "Unauthorized", details: "User not authenticated" },
       401
     );
   }
+
+  const { eventId } = c.req.valid("param");
+  console.log("Event ID from params:", eventId);
+  console.log("Authenticated user:", user);
   const userId = user.sub;
   const sql = postgres(c.env?.HYPERDRIVE?.connectionString);
 
