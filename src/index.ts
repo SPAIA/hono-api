@@ -13,6 +13,7 @@ import imageRoutes from "./routes/images";
 import deviceRoutes from "./routes/devices";
 import myRoutes from "./routes/my";
 import { submissions } from "./routes/submissions";
+import projects from "./routes/projects";
 
 // const app = new Hono<{ Bindings: Env }>();
 const app = new OpenAPIHono<CFEnv>();
@@ -44,6 +45,7 @@ app.route("/", imageRoutes);
 app.route("/", deviceRoutes);
 app.route("/", myRoutes);
 app.route("/", submissions);
+app.route("/projects", projects);
 app.get("/ui", swaggerUI({ url: "/doc" }));
 
 export default app;
