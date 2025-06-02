@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import type { RouteConfig } from "@hono/zod-openapi";
 import { EventResponseSchema, EventsResponseSchema } from "../schemas/events";
 import { EventQuerySchema } from "../schemas/validation";
-import { fetchEventById, fetchEvents, deleteEvent, verifyEvent } from "../services/events";
+import { fetchEventById, fetchEvents, deleteEvent, verifyEvent, fetchEventsByProject } from "../services/events";
 import postgres from "postgres";
 import type { CFEnv } from "../types";
 import { z } from "@hono/zod-openapi";
@@ -396,8 +396,6 @@ events.openapi(verifyEventRoute, async (c) => {
   }
 
   const { eventId } = c.req.valid("param");
-  console.log("Event ID from params:", eventId);
-  console.log("Authenticated user:", user);
   const userId = user.sub;
   const sql = postgres(c.env?.HYPERDRIVE?.connectionString);
 
@@ -432,5 +430,64 @@ events.openapi(verifyEventRoute, async (c) => {
     await sql.end();
   }
 });
+const getProjectEventsRoute = createRoute({
+  method: "get",
+  path: "/events/project/{projectId}",
+  tags: ["Events"],
+  summary: "Get events from all devices belonging to a project",
+  request: {
+    params: z.object({
+      projectId: z.string(),
+    }),
+    query: ExtendedEventQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Success",
+      content: {
+        "application/json": {
+          schema: EventsResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: "Server error",
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
 
-export { events, getEventsRoute, getDeviceEventsRoute, getUserEventsRoute, deleteEventRoute, verifyEventRoute };
+events.openapi(getProjectEventsRoute, async (c) => {
+  const { projectId } = c.req.valid("param");
+  const queryParams = c.req.valid("query");
+  const sql = postgres(c.env?.HYPERDRIVE?.connectionString);
+
+  try {
+    const processedParams = {
+      ...queryParams,
+      projectId: Number(projectId),
+      hasMedia: queryParams.hasMedia ? queryParams.hasMedia === "true" : undefined,
+    };
+
+    const { events, totalCount } = await fetchEventsByProject(sql, processedParams);
+    const response = formatResponse(events, totalCount, processedParams);
+    return c.json(response);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    return c.json(
+      {
+        error: "Internal server error",
+        details: errorMessage,
+      },
+      500
+    );
+  } finally {
+    await sql.end();
+  }
+});
+
+export { events, getEventsRoute, getDeviceEventsRoute, getUserEventsRoute, deleteEventRoute, verifyEventRoute, getProjectEventsRoute };

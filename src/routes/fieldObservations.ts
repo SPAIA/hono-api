@@ -1,19 +1,19 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import type { RouteConfig } from "@hono/zod-openapi";
 import {
-    SubmissionResponseSchema,
-    SubmissionsResponseSchema,
-    CreateSubmissionSchema,
+    FieldObservationResponseSchema,
+    FieldObservationsResponseSchema,
+    CreateFieldObservationSchema,
     CreateSightingSchema,
     SightingSchema
-} from "../schemas/submissions";
+} from "../schemas/fieldObservations";
 import {
-    createSubmission,
-    getSubmission,
-    getSubmissionsByUser,
-    deleteSubmission,
+    createFieldObservation,
+    getFieldObservation,
+    getFieldObservationsByUser,
+    deleteFieldObservation,
     createSighting
-} from "../services/submissions";
+} from "../services/fieldObservations";
 import postgres from "postgres";
 import type { CFEnv } from "../types";
 import { z } from "@hono/zod-openapi";
@@ -25,7 +25,7 @@ type SupabaseUser = {
     [key: string]: unknown;
 };
 
-const submissions = new OpenAPIHono<CFEnv>();
+const fieldObservations = new OpenAPIHono<CFEnv>();
 
 // Error response schema
 const ErrorResponseSchema = z.object({
@@ -34,14 +34,14 @@ const ErrorResponseSchema = z.object({
 });
 
 function formatResponse(
-    submissions: any[],
+    observations: any[],
     totalCount: number,
     params: { page: number; limit: number }
 ) {
     const totalPages = Math.ceil(totalCount / params.limit);
 
     return {
-        data: submissions,
+        data: observations,
         pagination: {
             currentPage: params.page,
             totalPages,
@@ -52,26 +52,27 @@ function formatResponse(
     };
 }
 
-const createSubmissionRoute = createRoute({
+// Create Field Observation
+const createFieldObservationRoute = createRoute({
     method: "post",
-    path: "/submissions",
-    tags: ["Submissions"],
-    summary: "Create a new submission",
+    path: "/field-observations",
+    tags: ["Field Observations"],
+    summary: "Create a new field observation",
     request: {
         body: {
             content: {
                 "application/json": {
-                    schema: CreateSubmissionSchema,
+                    schema: CreateFieldObservationSchema,
                 },
             },
         },
     },
     responses: {
         201: {
-            description: "Submission created",
+            description: "Field observation created",
             content: {
                 "application/json": {
-                    schema: SubmissionResponseSchema,
+                    schema: FieldObservationResponseSchema,
                 },
             },
         },
@@ -94,8 +95,8 @@ const createSubmissionRoute = createRoute({
     },
 });
 
-submissions.use('/submissions', supabaseAuthMiddleware);
-submissions.openapi(createSubmissionRoute, async (c) => {
+fieldObservations.use('/field-observations', supabaseAuthMiddleware);
+fieldObservations.openapi(createFieldObservationRoute, async (c) => {
     const user = c.get('user') as SupabaseUser;
     if (!user?.sub) {
         return c.json(
@@ -104,7 +105,7 @@ submissions.openapi(createSubmissionRoute, async (c) => {
         );
     }
 
-    const submissionData = await c.req.json();
+    const observationData = await c.req.json();
     const connectionString = c.env?.HYPERDRIVE?.connectionString;
     if (!connectionString) {
         return c.json(
@@ -115,10 +116,10 @@ submissions.openapi(createSubmissionRoute, async (c) => {
     const sql = postgres(connectionString);
 
     try {
-        const { submission, sightings } = await createSubmission(sql, submissionData, user.sub);
+        const { observation, sightings } = await createFieldObservation(sql, observationData, user.sub);
         return c.json({
             data: {
-                ...submission,
+                ...observation,
                 sightings: sightings || []
             }
         }, 201);
@@ -136,11 +137,12 @@ submissions.openapi(createSubmissionRoute, async (c) => {
     }
 });
 
-const getSubmissionRoute = createRoute({
+// Get Field Observation by ID
+const getFieldObservationRoute = createRoute({
     method: "get",
-    path: "/submissions/{id}",
-    tags: ["Submissions"],
-    summary: "Get a submission by ID",
+    path: "/field-observations/{id}",
+    tags: ["Field Observations"],
+    summary: "Get a field observation by ID",
     request: {
         params: z.object({
             id: z.string().uuid(),
@@ -148,15 +150,15 @@ const getSubmissionRoute = createRoute({
     },
     responses: {
         200: {
-            description: "Submission details",
+            description: "Field observation details",
             content: {
                 "application/json": {
-                    schema: SubmissionResponseSchema,
+                    schema: FieldObservationResponseSchema,
                 },
             },
         },
         404: {
-            description: "Submission not found",
+            description: "Field observation not found",
             content: {
                 "application/json": {
                     schema: ErrorResponseSchema,
@@ -174,7 +176,7 @@ const getSubmissionRoute = createRoute({
     },
 });
 
-submissions.openapi(getSubmissionRoute, async (c) => {
+fieldObservations.openapi(getFieldObservationRoute, async (c) => {
     const { id } = c.req.valid("param");
     const connectionString = c.env?.HYPERDRIVE?.connectionString;
     if (!connectionString) {
@@ -186,16 +188,16 @@ submissions.openapi(getSubmissionRoute, async (c) => {
     const sql = postgres(connectionString);
 
     try {
-        const result = await getSubmission(sql, id);
+        const result = await getFieldObservation(sql, id);
         if (!result) {
             return c.json(
-                { error: "Not found", details: "Submission not found" },
+                { error: "Not found", details: "Field observation not found" },
                 404
             );
         }
         return c.json({
             data: {
-                ...result.submission,
+                ...result.observation,
                 sightings: result.sightings || []
             }
         });
@@ -213,11 +215,12 @@ submissions.openapi(getSubmissionRoute, async (c) => {
     }
 });
 
-const getUserSubmissionsRoute = createRoute({
+// Get User's Field Observations
+const getUserFieldObservationsRoute = createRoute({
     method: "get",
-    path: "/submissions/user/{userId}",
-    tags: ["Submissions"],
-    summary: "Get submissions for a user",
+    path: "/field-observations/user/{userId}",
+    tags: ["Field Observations"],
+    summary: "Get field observations for a user",
     request: {
         params: z.object({
             userId: z.string(),
@@ -229,10 +232,10 @@ const getUserSubmissionsRoute = createRoute({
     },
     responses: {
         200: {
-            description: "User submissions",
+            description: "User field observations",
             content: {
                 "application/json": {
-                    schema: SubmissionsResponseSchema,
+                    schema: FieldObservationsResponseSchema,
                 },
             },
         },
@@ -247,7 +250,7 @@ const getUserSubmissionsRoute = createRoute({
     },
 });
 
-submissions.openapi(getUserSubmissionsRoute, async (c) => {
+fieldObservations.openapi(getUserFieldObservationsRoute, async (c) => {
     const { userId } = c.req.valid("param");
     const queryParams = c.req.valid("query");
     const connectionString = c.env?.HYPERDRIVE?.connectionString;
@@ -260,21 +263,12 @@ submissions.openapi(getUserSubmissionsRoute, async (c) => {
     const sql = postgres(connectionString);
 
     try {
-        const { submissions, totalCount } = await getSubmissionsByUser(
+        const { observations, totalCount } = await getFieldObservationsByUser(
             sql,
             userId,
             queryParams
         );
-        return c.json({
-            data: submissions,
-            pagination: {
-                currentPage: queryParams.page,
-                totalPages: Math.ceil(totalCount / queryParams.limit),
-                totalCount,
-                hasNextPage: queryParams.page < Math.ceil(totalCount / queryParams.limit),
-                hasPrevPage: queryParams.page > 1
-            }
-        });
+        return c.json(formatResponse(observations, totalCount, queryParams));
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
         return c.json(
@@ -289,11 +283,12 @@ submissions.openapi(getUserSubmissionsRoute, async (c) => {
     }
 });
 
-const deleteSubmissionRoute = createRoute({
+// Delete Field Observation
+const deleteFieldObservationRoute = createRoute({
     method: "delete",
-    path: "/submissions/{id}",
-    tags: ["Submissions"],
-    summary: "Delete a submission",
+    path: "/field-observations/{id}",
+    tags: ["Field Observations"],
+    summary: "Delete a field observation",
     request: {
         params: z.object({
             id: z.string().uuid(),
@@ -301,10 +296,10 @@ const deleteSubmissionRoute = createRoute({
     },
     responses: {
         204: {
-            description: "Submission deleted",
+            description: "Field observation deleted",
         },
         404: {
-            description: "Submission not found",
+            description: "Field observation not found",
             content: {
                 "application/json": {
                     schema: ErrorResponseSchema,
@@ -322,8 +317,8 @@ const deleteSubmissionRoute = createRoute({
     },
 });
 
-submissions.use('/submissions/*', supabaseAuthMiddleware);
-submissions.openapi(deleteSubmissionRoute, async (c) => {
+fieldObservations.use('/field-observations/*', supabaseAuthMiddleware);
+fieldObservations.openapi(deleteFieldObservationRoute, async (c) => {
     const { id } = c.req.valid("param");
     const connectionString = c.env?.HYPERDRIVE?.connectionString;
     if (!connectionString) {
@@ -335,10 +330,10 @@ submissions.openapi(deleteSubmissionRoute, async (c) => {
     const sql = postgres(connectionString);
 
     try {
-        const deleted = await deleteSubmission(sql, id);
+        const deleted = await deleteFieldObservation(sql, id);
         if (!deleted) {
             return c.json(
-                { error: "Not found", details: "Submission not found" },
+                { error: "Not found", details: "Field observation not found" },
                 404
             );
         }
@@ -357,11 +352,12 @@ submissions.openapi(deleteSubmissionRoute, async (c) => {
     }
 });
 
+// Create Sighting
 const createSightingRoute = createRoute({
     method: "post",
-    path: "/submissions/{id}/sightings",
-    tags: ["Submissions"],
-    summary: "Add a sighting to a submission",
+    path: "/field-observations/{id}/sightings",
+    tags: ["Field Observations"],
+    summary: "Add a sighting to a field observation",
     request: {
         params: z.object({
             id: z.string().uuid(),
@@ -404,8 +400,8 @@ const createSightingRoute = createRoute({
     },
 });
 
-submissions.use('/submissions/*/sightings', supabaseAuthMiddleware);
-submissions.openapi(createSightingRoute, async (c) => {
+fieldObservations.use('/field-observations/*/sightings', supabaseAuthMiddleware);
+fieldObservations.openapi(createSightingRoute, async (c) => {
     const { id } = c.req.valid("param");
     const sightingData = await c.req.json();
     const connectionString = c.env?.HYPERDRIVE?.connectionString;
@@ -436,4 +432,4 @@ submissions.openapi(createSightingRoute, async (c) => {
     }
 });
 
-export { submissions };
+export default fieldObservations;

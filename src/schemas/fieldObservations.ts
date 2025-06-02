@@ -4,18 +4,20 @@ import { z } from "zod";
 const TimestampSchema = z.coerce.date();
 const NullableStringSchema = z.string().nullable();
 
-// Submission schema
-export const SubmissionSchema = z.object({
-    id: z.string().uuid(),
-    user_id: z.string(),
+// Field Observation schema
+export const FieldObservationSchema = z.object({
+    id: z.string().uuid().optional(),
+    user_id: z.string().uuid(),
     type: z.enum(['transect', 'fit']),
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
-    location: NullableStringSchema,
+    time: z.coerce.date(), // Using timestamp with timezone
+    location: z.object({
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180)
+    }),
     weather: NullableStringSchema,
     temperature: z.number().int().optional(),
-    wind: NullableStringSchema,
-    season: NullableStringSchema,
+    wind: z.enum(['calm', 'light', 'moderate', 'strong']).nullable(),
+    season: z.enum(['Spring', 'Summer', 'Autumn', 'Winter']).nullable(),
     consent: z.boolean().default(false),
     created_at: TimestampSchema
 });
@@ -23,7 +25,7 @@ export const SubmissionSchema = z.object({
 // Sighting schema
 export const SightingSchema = z.object({
     id: z.number(),
-    submission_id: z.string().uuid(),
+    fieldObservationId: z.string().uuid(),
     group_name: z.string(),
     estimated_count: z.number().int().nonnegative(),
     behavior: NullableStringSchema,
@@ -34,14 +36,14 @@ export const SightingSchema = z.object({
 });
 
 // API response schemas
-export const SubmissionResponseSchema = z.object({
-    data: SubmissionSchema.extend({
+export const FieldObservationResponseSchema = z.object({
+    data: FieldObservationSchema.extend({
         sightings: z.array(SightingSchema)
     })
 });
 
-export const SubmissionsResponseSchema = z.object({
-    data: z.array(SubmissionSchema),
+export const FieldObservationsResponseSchema = z.object({
+    data: z.array(FieldObservationSchema),
     pagination: z.object({
         currentPage: z.number(),
         totalPages: z.number(),
@@ -55,15 +57,17 @@ export const SubmissionsResponseSchema = z.object({
 export const CreateSightingSchema = SightingSchema.omit({
     id: true,
     created_at: true
+}).extend({
+    fieldObservationId: z.string().uuid().optional() // Optional for creation
 });
 
-export const CreateSubmissionSchema = SubmissionSchema.omit({
-    id: true,
+export const CreateFieldObservationSchema = FieldObservationSchema.omit({
     created_at: true
 }).extend({
+    id: z.string().uuid().optional(),
     sightings: z.array(CreateSightingSchema.omit({
-        submission_id: true
+        fieldObservationId: true
     })).optional()
 });
 
-export const UpdateSubmissionSchema = CreateSubmissionSchema.partial();
+export const UpdateFieldObservationSchema = CreateFieldObservationSchema.partial();

@@ -12,7 +12,7 @@ import { CFEnv } from "./types";
 import imageRoutes from "./routes/images";
 import deviceRoutes from "./routes/devices";
 import myRoutes from "./routes/my";
-import { submissions } from "./routes/submissions";
+import fieldObservations from "./routes/fieldObservations";
 import projects from "./routes/projects";
 
 // const app = new Hono<{ Bindings: Env }>();
@@ -44,8 +44,8 @@ app.route("/", events);
 app.route("/", imageRoutes);
 app.route("/", deviceRoutes);
 app.route("/", myRoutes);
-app.route("/", submissions);
-app.route("/projects", projects);
+app.route("/", fieldObservations);
+app.route("/", projects);
 app.get("/ui", swaggerUI({ url: "/doc" }));
 
 export default app;

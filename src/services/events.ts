@@ -285,5 +285,75 @@ async function verifyEvent(sql: any, eventId: string, userId: string) {
     throw error;
   }
 }
+async function fetchEventsByProject(sql: any, params: any) {
+  // Get all device IDs for the project
+  const deviceIds = await sql`
+    SELECT d.id 
+    FROM "Devices" d
+    JOIN "ProjectDevices" pd ON d.id = pd."deviceId"
+    WHERE pd."projectId" = ${params.projectId}
+  `;
 
-export { fetchEvents, fetchEventById, deleteEvent, verifyEvent };
+  if (deviceIds.length === 0) {
+    return { events: [], totalCount: 0 };
+  }
+
+  const deviceIdArray = deviceIds.map((d: any) => d.id);
+
+  // Now fetch events for those devices using similar logic to fetchEvents
+  // You'll need to adapt your existing fetchEvents query to filter by device IDs
+  // This is a simplified version - you may need to adjust based on your exact fetchEvents implementation
+
+  const offset = (params.page - 1) * params.limit;
+
+  let whereConditions = [`e."deviceId" = ANY(${deviceIdArray})`];
+  let queryParams = [deviceIdArray];
+
+  // Add other filters if they exist
+  if (params.hasMedia !== undefined) {
+    whereConditions.push(`(e.media IS ${params.hasMedia ? 'NOT NULL' : 'NULL'})`);
+  }
+
+  const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+  console.log("where", whereClause)
+  const [countResult] = await sql`
+    SELECT COUNT(*) as total
+    FROM "Events" e
+    ${sql.unsafe(whereClause)}
+  `;
+
+  const events = await sql`
+    SELECT 
+      e.*,
+      d.name as device_name,
+      d.serial as device_serial,
+      dt.name as device_type_name
+    FROM "Events" e
+    LEFT JOIN "Devices" d ON e."deviceId" = d.id
+    LEFT JOIN "DeviceTypes" dt ON d."typeId" = dt.id
+    ${sql.unsafe(whereClause)}
+    ORDER BY e."createdAt" DESC
+    LIMIT ${params.limit}
+    OFFSET ${offset}
+  `;
+  console.log(`
+    SELECT 
+      e.*,
+      d.name as device_name,
+      d.serial as device_serial,
+      dt.name as device_type_name
+    FROM "Events" e
+    LEFT JOIN "Devices" d ON e."deviceId" = d.id
+    LEFT JOIN "DeviceTypes" dt ON d."typeId" = dt.id
+    ${sql.unsafe(whereClause)}
+    ORDER BY e."createdAt" DESC
+    LIMIT ${params.limit}
+    OFFSET ${offset}
+  `)
+  return {
+    events,
+    totalCount: parseInt(countResult.total)
+  };
+}
+
+export { fetchEvents, fetchEventById, deleteEvent, verifyEvent, fetchEventsByProject };
